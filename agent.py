@@ -1,16 +1,10 @@
 import os
-import csv
-import math
 import numpy as np
 import pandas as pd
 
 # -----------------------------
 # LangChain imports (modern structure)
 # -----------------------------
-from langchain.prompts.chat import ChatPromptTemplate
-from langchain.output_parsers import StrOutputParser
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-
 from langchain.chat_models import ChatOpenAI
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
@@ -19,18 +13,17 @@ from langchain.memory import ConversationSummaryMemory
 from langchain.agents import initialize_agent, AgentExecutor, AgentType
 from langchain import hub  # For pulling prompts from LangChain Hub
 
+# Tavily
+from langchain_community.tools.tavily_search import TavilySearchResults
+
 # -----------------------------
 # Gradio
 # -----------------------------
 import gradio as gr
 
 # -----------------------------
-# API Keys (set these in EC2 environment)
+# API Keys (EC2 environment)
 # -----------------------------
-# Make sure you export these in your EC2 shell:
-# export OPENAI_API_KEY="your_openai_key"
-# export TAVILY_API_KEY="your_tavily_key"
-
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
 
@@ -61,17 +54,11 @@ amazon_tool = VectorStoreRetrieverTool(
 
 @tool
 def amazon_product_search(query: str):
-    """
-    Search for information about Amazon products.
-    """
     return amazon_tool.run(query)
 
 # -----------------------------
 # Tavily Search Tool
 # -----------------------------
-# You may need to reinstall langchain-community
-from langchain_community.tools.tavily_search import TavilySearchResults
-
 tavily_search_tool = TavilySearchResults(
     max_results=5,
     include_images=True,
@@ -80,17 +67,14 @@ tavily_search_tool = TavilySearchResults(
 
 @tool
 def search_tavily(query: str):
-    """
-    Search the web using Tavily.
-    """
     return tavily_search_tool.run(query)
 
 tools = [amazon_product_search, search_tavily]
 
 # -----------------------------
-# Load ReAct prompt from LangChain Hub
+# Load ReAct prompt from LangChain Hub (optional)
 # -----------------------------
-prompt = hub.pull("hwchase17/react")
+prompt = hub.pull("hwchase17/react")  # Can skip if you want default
 
 # -----------------------------
 # Chat LLM
