@@ -1,47 +1,41 @@
 import os
-import csv
-import math
 import pandas as pd
 import numpy as np
-
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_core.prompts import ChatPromptTemplate
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_core.output_parsers import StrOutputParser
-from langchain.agents import AgentExecutor, create_react_agent
+from langchain import hub
+from langchain.chat_models import ChatOpenAI
+from langchain.chains.summarize import load_summarize_chain
+from langchain.vectorstores import FAISS
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.agents import create_react_agent, AgentExecutor
 from langchain.memory import ConversationSummaryMemory
 from langchain.tools import tool
 from langchain.tools.retriever import create_retriever_tool
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain import hub
 
-import gradio as gr
+# ---------------------------
+# Setup API Keys
+# ---------------------------
+Open_API_Key = os.environ.get("OPENAI_API_KEY")
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
 
-# ----------------------
-# API KEYS
-# ----------------------
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY")
+# LLM models
+MODEL = "gpt-4o-mini"
+llm = ChatOpenAI(model_name=MODEL)
 
-# ----------------------
-# Embeddings & VectorStore
-# ----------------------
+# ---------------------------
+# Embeddings and Vectorstore
+# ---------------------------
 embeddings = OpenAIEmbeddings()
-vector = FAISS.load_local(
-    "./faiss_index", embeddings, allow_dangerous_deserialization=True
-)
+vector = FAISS.load_local("./faiss_index", embeddings, allow_dangerous_deserialization=True)
+
 retriever = vector.as_retriever(search_type="similarity", search_kwargs={"k": 4})
 
-# ----------------------
+# ---------------------------
 # Tools
-# ----------------------
-# Amazon product search tool
+# ---------------------------
 amazon_tool = create_retriever_tool(
     name="Amazon Product Search",
-    description="Search for information about Amazon products. Use for any questions about Amazon products.",
+    description="Search for information about Amazon products.",
     retriever=retriever
 )
 
@@ -49,7 +43,8 @@ amazon_tool = create_retriever_tool(
 def amazon_product_search(query: str):
     return amazon_tool.run(query)
 
-# Tavily search tool
+# Tavily search
+from langchain_community.tools.tavily_search import TavilySearchResults
 tavily_search_tool = TavilySearchResults(max_results=5, include_images=True)
 
 @tool
@@ -58,52 +53,53 @@ def search_tavily(query: str):
 
 tools = [amazon_product_search, search_tavily]
 
-# ----------------------
-# Load LangChain Hub Prompt
-# ----------------------
+# ---------------------------
+# Agent with Memory
+# ---------------------------
 prompt = hub.pull("hwchase17/react")
 
-# ----------------------
-# Session Memory
-# ----------------------
-summary_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True)
+summary_memory = ConversationSummaryMemory(
+    llm=llm,
+    max_token_limit=500,
+    memory_key="chat_history",
+    return_messages=True
+)
+
+react_agent = create_react_agent(
+    llm=llm,
+    tools=tools,
+    prompt=prompt
+)
+
+agent_executor = AgentExecutor(
+    agent=react_agent,
+    tools=tools,
+    memory=summary_memory,
+    verbose=True
+)
+
+# ---------------------------
+# Gradio App
+# ---------------------------
+import gradio as gr
 
 session_memory = {}
 
 def get_memory(session_id):
     if session_id not in session_memory:
         session_memory[session_id] = ConversationSummaryMemory(
-            llm=summary_llm,
+            llm=llm,
             memory_key="chat_history",
             return_messages=True
         )
     return session_memory[session_id]
 
-# ----------------------
-# Agent Setup
-# ----------------------
-summary_react_agent = create_react_agent(
-    llm=summary_llm,
-    tools=tools,
-    prompt=prompt
-)
-
-def chat_with_agent(user_input, session_id):
+def chat_with_agent(user_input, session_id="default"):
     memory = get_memory(session_id)
-    agent_executor = AgentExecutor(
-        agent=summary_react_agent,
-        tools=tools,
-        memory=memory,
-        verbose=True
-    )
-    response = agent_executor.invoke({"input": user_input})
-    if isinstance(response, dict) and "output" in response:
-        return response["output"]
-    return response
+    executor = AgentExecutor(agent=react_agent, tools=tools, memory=memory, verbose=True)
+    response = executor.invoke({"input": user_input})
+    return response.get("output", str(response))
 
-# ----------------------
-# Gradio UI
-# ----------------------
 with gr.Blocks() as app:
     gr.Markdown("# 🤖 Review Genie - Agents & ReAct Framework")
     gr.Markdown("Enter your query below and get AI-powered responses with session memory.")
@@ -113,7 +109,6 @@ with gr.Blocks() as app:
         output_box = gr.Textbox(label="Response:", lines=10)
 
     submit_button = gr.Button("Submit")
-    submit_button.click(chat_with_agent, inputs=[input_box, gr.State(value="session")], outputs=output_box)
+    submit_button.click(chat_with_agent, inputs=input_box, outputs=output_box)
 
-# Launch app
 app.launch(debug=True, share=True)
