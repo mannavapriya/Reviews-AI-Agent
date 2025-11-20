@@ -1,22 +1,24 @@
-# Core LangChain packages
-langchain==0.1.0rc46
+# LangChain core & community modules
+langchain==0.1.17
 langchain-openai==0.0.26
-langchain-core==0.0.21
-langchain-community==0.1.26
-langchain-text-splitters==0.0.5
+langchain-community==0.0.32
+langchain-core==0.1.17
+
+# LLM
+openai==1.29.0
 
 # Vector store
 faiss-cpu==1.7.4
 
-# Gradio for UI
-gradio==3.52.0
+# Text splitting
+langchain-text-splitters==0.0.8
 
-# HuggingFace for hub access (needed by LangChain)
-huggingface-hub==0.18.1
-
-# OpenAI SDK
-openai==1.29.0
-
-# Standard packages
+# Utilities
 numpy==1.25.2
 pandas==2.1.1
+
+# Gradio
+gradio==3.53.2
+
+# Optional: hub integration
+requests==2.31.0

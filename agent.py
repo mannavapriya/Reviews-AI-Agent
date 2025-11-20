@@ -28,8 +28,8 @@ import gradio as gr
 # -----------------------------
 # API Keys (set these once in your EC2 environment)
 # -----------------------------
-os.environ["OPENAI_API_KEY"] = "YOUR_OPENAI_KEY"
-os.environ["TAVILY_API_KEY"] = "YOUR_TAVILY_KEY"
+os.environ["OPENAI_API_KEY"] = "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"
+os.environ["TAVILY_API_KEY"] = "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"
 
 # -----------------------------
 # Embeddings + FAISS vector store
