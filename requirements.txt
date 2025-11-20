@@ -1,7 +1,18 @@
-numpy>=1.25.2
-pandas>=2.1.0
-gradio>=3.40.0
+# LangChain core
+langchain>=0.3.32
+
+# OpenAI
+openai>=0.27.8
+
+# FAISS
 faiss-cpu>=1.7.4
-langchain>=0.0.350
-langchain-openai>=0.3.35
-langchain-community>=0.0.40
+
+# LangChain community (for Tavily)
+langchain-community>=0.0.134
+
+# Gradio
+gradio>=3.45.0
+
+# Pandas / Numpy
+pandas>=2.1.1
+numpy>=1.26.0
