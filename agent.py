@@ -4,41 +4,37 @@ import math
 import numpy as np
 import pandas as pd
 
+# -----------------------------
 # LangChain Core imports
+# -----------------------------
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-
-# Text splitters
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# OpenAI LLM + embeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-
-# Vector store
 from langchain_community.vectorstores import FAISS
 
-# Tools
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain.tools import tool
 from langchain.tools.retriever import create_retriever_tool
 
-# Agent + memory
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.memory import ConversationSummaryMemory
-
-# LangChain Hub (0.x correct import)
 from langchain import hub
 
 import gradio as gr
 
 # -----------------------------
-# API Keys
+# API Keys (set directly for EC2)
 # -----------------------------
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY")
+OPENAI_API_KEY = "your_openai_api_key_here"
+TAVILY_API_KEY = "your_tavily_api_key_here"
+
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+os.environ["TAVILY_API_KEY"] = TAVILY_API_KEY
 
 # -----------------------------
-# Embeddings + Vector Store
+# Embeddings + FAISS Vector Store
 # -----------------------------
 embeddings = OpenAIEmbeddings()
 
@@ -64,6 +60,9 @@ amazon_tool = create_retriever_tool(
 
 @tool
 def amazon_product_search(query: str):
+    """
+    Search for information about Amazon products using FAISS index.
+    """
     return amazon_tool.run(query)
 
 # -----------------------------
@@ -76,6 +75,10 @@ tavily_search_tool = TavilySearchResults(
 
 @tool
 def search_tavily(query: str):
+    """
+    Executes a web search using TavilySearchResults tool.
+    Returns a list of search results with answers and images.
+    """
     return tavily_search_tool.run(query)
 
 tools = [amazon_product_search, search_tavily]
@@ -115,7 +118,7 @@ summary_react_agent = create_react_agent(
 )
 
 # -----------------------------
-# Agent execution
+# Agent execution function
 # -----------------------------
 def chat_with_agent(user_input, session_id):
     memory = get_memory(session_id)
@@ -145,7 +148,6 @@ with gr.Blocks() as app:
         output_box = gr.Textbox(label="AI Response:", lines=10)
 
     submit = gr.Button("Submit")
-
     submit.click(
         chat_with_agent,
         inputs=[input_box, gr.State("session")],
