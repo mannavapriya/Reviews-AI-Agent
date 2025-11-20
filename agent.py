@@ -7,15 +7,14 @@ import pandas as pd
 # -----------------------------
 # LangChain imports
 # -----------------------------
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.prompts import ChatPromptTemplate
+from langchain.output_parsers import StrOutputParser
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain.tools import tool
-from langchain.tools.retriever import create_retriever_tool
+from langchain.tools import tool, VectorStoreRetrieverTool
 from langchain.agents import create_react_agent, AgentExecutor
 from langchain.memory import ConversationSummaryMemory
 from langchain import hub  # For pulling prompts from LangChain Hub
@@ -26,15 +25,15 @@ from langchain import hub  # For pulling prompts from LangChain Hub
 import gradio as gr
 
 # -----------------------------
-# Ensure API Keys are set in EC2 environment
+# API Keys (set these on your EC2 environment)
+# Example: export OPENAI_API_KEY="sk-xxxx" 
+#          export TAVILY_API_KEY="tvly-xxxx"
 # -----------------------------
-openai_key = os.environ.get("OPENAI_API_KEY")
-tavily_key = os.environ.get("TAVILY_API_KEY")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
 
-if not openai_key or not tavily_key:
-    raise ValueError(
-        "Please set the environment variables OPENAI_API_KEY and TAVILY_API_KEY on your EC2 instance."
-    )
+if not OPENAI_API_KEY or not TAVILY_API_KEY:
+    raise ValueError("Please set OPENAI_API_KEY and TAVILY_API_KEY in your environment")
 
 # -----------------------------
 # Embeddings + FAISS vector store
@@ -55,7 +54,7 @@ retriever = vector.as_retriever(
 # -----------------------------
 # Amazon Retriever Tool
 # -----------------------------
-amazon_tool = create_retriever_tool(
+amazon_tool = VectorStoreRetrieverTool(
     name="Amazon Product Search",
     description="Search FAISS index for Amazon product data.",
     retriever=retriever
@@ -63,9 +62,6 @@ amazon_tool = create_retriever_tool(
 
 @tool
 def amazon_product_search(query: str):
-    """
-    Search for information about Amazon products.
-    """
     return amazon_tool.run(query)
 
 # -----------------------------
@@ -78,9 +74,6 @@ tavily_search_tool = TavilySearchResults(
 
 @tool
 def search_tavily(query: str):
-    """
-    Search the web using Tavily.
-    """
     return tavily_search_tool.run(query)
 
 tools = [amazon_product_search, search_tavily]
