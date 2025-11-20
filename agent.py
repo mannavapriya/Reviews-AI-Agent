@@ -1,5 +1,3 @@
-!pip install pandas numpy langchain langchain-core langchain-openai langchain-text-splitters langchain-community faiss-cpu
-
 import csv
 import pandas as pd
 import math
