@@ -7,7 +7,7 @@ langchainhub
 langchain_community
 
 # Gradio for UI
-gradio>=3.53.0,<3.56
+gradio>=3.55.0,<3.56.0
 gradio_client
 
 # Tavily integration
