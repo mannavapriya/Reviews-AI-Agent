@@ -4,9 +4,11 @@ import math
 import numpy as np
 import pandas as pd
 
-# LangChain modern imports
+# LangChain Core imports
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+
+# Text splitters
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # OpenAI LLM + embeddings
@@ -20,12 +22,14 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain.tools import tool
 from langchain.tools.retriever import create_retriever_tool
 
-# Agent & memory (modern)
-from langchain.agents import create_react_agent, AgentExecutor
+# Agent + memory
+from langchain.agents import AgentExecutor, create_react_agent
 from langchain.memory import ConversationSummaryMemory
 
-# LangChain Hub (modern path)
-from langchain_hub import pull_prompt
+# LangChain Hub (0.x correct import)
+from langchain import hub
+
+import gradio as gr
 
 # -----------------------------
 # API Keys
@@ -34,7 +38,7 @@ os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY")
 
 # -----------------------------
-# Embeddings + FAISS
+# Embeddings + Vector Store
 # -----------------------------
 embeddings = OpenAIEmbeddings()
 
@@ -77,12 +81,12 @@ def search_tavily(query: str):
 tools = [amazon_product_search, search_tavily]
 
 # -----------------------------
-# Prompt (via LC Hub)
+# Prompt from LangChain Hub
 # -----------------------------
-prompt = pull_prompt("hwchase17/react")
+prompt = hub.pull("hwchase17/react")
 
 # -----------------------------
-# Session Memory
+# Memory
 # -----------------------------
 summary_llm = ChatOpenAI(
     model="gpt-4o-mini",
@@ -111,7 +115,7 @@ summary_react_agent = create_react_agent(
 )
 
 # -----------------------------
-# Agent Execution Function
+# Agent execution
 # -----------------------------
 def chat_with_agent(user_input, session_id):
     memory = get_memory(session_id)
@@ -132,8 +136,6 @@ def chat_with_agent(user_input, session_id):
 # -----------------------------
 # Gradio UI
 # -----------------------------
-import gradio as gr
-
 with gr.Blocks() as app:
     gr.Markdown("# 🤖 Review Genie — LangChain ReAct Agent")
     gr.Markdown("Ask anything. Session-based memory enabled.")
@@ -143,6 +145,7 @@ with gr.Blocks() as app:
         output_box = gr.Textbox(label="AI Response:", lines=10)
 
     submit = gr.Button("Submit")
+
     submit.click(
         chat_with_agent,
         inputs=[input_box, gr.State("session")],
