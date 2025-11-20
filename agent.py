@@ -35,14 +35,8 @@ import gradio as gr
 # -----------------------------
 # API Keys
 # -----------------------------
-# Replace with your actual keys or ensure these environment variables are set
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY") or "YOUR_OPENAI_API_KEY"
 os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY") or "YOUR_TAVILY_API_KEY"
-
-# -----------------------------
-# Rebuild ChatOpenAI model to fix Pydantic v2 error
-# -----------------------------
-ChatOpenAI.model_rebuild()
 
 # -----------------------------
 # Embeddings + FAISS
@@ -90,7 +84,7 @@ def search_tavily(query: str):
 tools = [amazon_product_search, search_tavily]
 
 # -----------------------------
-# Pull prompt from LangChain Hub
+# Prompt from LangChain Hub
 # -----------------------------
 prompt = hub.pull("hwchase17/react")
 
@@ -101,7 +95,7 @@ summary_llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0,
     streaming=True,
-    base_cache=None  # disables LangSmith API warning
+    base_cache=None  # disables LangSmith warning without model_rebuild()
 )
 
 session_memory = {}
@@ -125,7 +119,7 @@ summary_react_agent = create_react_agent(
 )
 
 # -----------------------------
-# Agent execution function
+# Agent execution
 # -----------------------------
 def chat_with_agent(user_input, session_id):
     memory = get_memory(session_id)
