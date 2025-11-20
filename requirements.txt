@@ -1,16 +1,21 @@
-langchain
-langchainhub
-langchain_community
-gradio
-gradio_client
-tavily-python
-faiss-cpu
-beautifulsoup4
+# Data & parsing
 pandas
 numpy
+beautifulsoup4
+faiss-cpu
+
+# LangChain core packages
+langchain
 langchain-core
 langchain-openai
 langchain-text-splitters
+langchainhub
 langchain-community
-faiss-cpu
+langchain-tavily
 
+# Gradio for UI
+gradio==3.56.2
+gradio_client
+
+# HuggingFace Hub (avoid import errors with Gradio)
+huggingface_hub==1.36.0
