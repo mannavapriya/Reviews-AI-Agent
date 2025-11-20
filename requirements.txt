@@ -1,13 +1,22 @@
+# LangChain core packages
 langchain>=1.0.0,<2.0.0
-langchainhub
-langchain_community
-gradio>=3.53.0,<3.56
-gradio_client
-tavily-python>=0.2.11,<0.3
-faiss-cpu
-beautifulsoup4
-pandas
-numpy
 langchain-core
 langchain-openai
 langchain-text-splitters
+langchainhub
+langchain_community
+
+# Gradio for UI
+gradio>=3.53.0,<3.56
+gradio_client
+
+# Tavily integration
+tavily-python>=0.2.11,<0.3
+
+# Vector database
+faiss-cpu
+
+# Data processing
+pandas
+numpy
+beautifulsoup4
