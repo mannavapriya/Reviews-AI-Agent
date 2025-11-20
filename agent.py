@@ -1,36 +1,42 @@
 import os
 import csv
 import math
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-# ==== LATEST LANGCHAIN IMPORTS ====
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+# LangChain modern imports
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.prompts import ChatPromptTemplate
-from langchain.memory import ConversationSummaryMemory
+
+# OpenAI LLM + embeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
+# Vector store
 from langchain_community.vectorstores import FAISS
-from langchain.agents import create_react_agent, AgentExecutor
-from langchain.tools import tool
+
+# Tools
 from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain.tools import tool
+from langchain.tools.retriever import create_retriever_tool
 
-# ==== ENVIRONMENT VARIABLES ====
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+# Agent & memory (modern)
+from langchain.agents import create_react_agent, AgentExecutor
+from langchain.memory import ConversationSummaryMemory
 
-if not OPENAI_API_KEY:
-    raise ValueError("Missing OPENAI_API_KEY env variable")
-if not TAVILY_API_KEY:
-    raise ValueError("Missing TAVILY_API_KEY env variable")
+# LangChain Hub (modern path)
+from langchain_hub import pull_prompt
 
-# ==== LLM ====
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    api_key=OPENAI_API_KEY
-)
+# -----------------------------
+# API Keys
+# -----------------------------
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY")
 
-# ==== VECTOR STORE ====
-embeddings = OpenAIEmbeddings(api_key=OPENAI_API_KEY)
+# -----------------------------
+# Embeddings + FAISS
+# -----------------------------
+embeddings = OpenAIEmbeddings()
 
 vector = FAISS.load_local(
     "./faiss_index",
@@ -39,99 +45,108 @@ vector = FAISS.load_local(
 )
 
 retriever = vector.as_retriever(
+    search_type="similarity",
     search_kwargs={"k": 4}
 )
 
-# ==== RETRIEVER TOOL ====
+# -----------------------------
+# Amazon Retriever Tool
+# -----------------------------
+amazon_tool = create_retriever_tool(
+    name="Amazon Product Search",
+    description="Search FAISS index for Amazon product data.",
+    retriever=retriever
+)
+
 @tool
 def amazon_product_search(query: str):
-    """Search Amazon product info from FAISS index."""
-    docs = retriever.get_relevant_documents(query)
-    return "\n".join([d.page_content for d in docs])
+    return amazon_tool.run(query)
 
-# ==== TAVILY TOOL ====
+# -----------------------------
+# Tavily Search Tool
+# -----------------------------
 tavily_search_tool = TavilySearchResults(
     max_results=5,
-    include_images=True,
-    tavily_api_key=TAVILY_API_KEY
+    include_images=True
 )
 
 @tool
 def search_tavily(query: str):
-    """Search the web using Tavily."""
     return tavily_search_tool.run(query)
 
 tools = [amazon_product_search, search_tavily]
 
-# ==== PROMPT ====
-prompt = ChatPromptTemplate.from_template("""
-You are ReviewGenie, an intelligent product-analysis assistant.
-Use tools when beneficial.
+# -----------------------------
+# Prompt (via LC Hub)
+# -----------------------------
+prompt = pull_prompt("hwchase17/react")
 
-User Input: {input}
-""")
-
-# ==== MEMORY ====
-summary_memory = ConversationSummaryMemory(
-    llm=llm,
-    memory_key="chat_history",
-    return_messages=True
+# -----------------------------
+# Session Memory
+# -----------------------------
+summary_llm = ChatOpenAI(
+    model="gpt-4o-mini",
+    temperature=0,
+    streaming=True
 )
-
-# ==== AGENT ====
-react_agent = create_react_agent(
-    llm=llm,
-    tools=tools,
-    prompt=prompt
-)
-
-agent_executor = AgentExecutor(
-    agent=react_agent,
-    tools=tools,
-    verbose=True,
-    memory=summary_memory
-)
-
-# ==== GRADIO UI ====
-import gradio as gr
 
 session_memory = {}
 
 def get_memory(session_id):
     if session_id not in session_memory:
         session_memory[session_id] = ConversationSummaryMemory(
-            llm=llm,
+            llm=summary_llm,
             memory_key="chat_history",
             return_messages=True
         )
     return session_memory[session_id]
 
+# -----------------------------
+# ReAct Agent
+# -----------------------------
+summary_react_agent = create_react_agent(
+    llm=summary_llm,
+    tools=tools,
+    prompt=prompt
+)
+
+# -----------------------------
+# Agent Execution Function
+# -----------------------------
 def chat_with_agent(user_input, session_id):
     memory = get_memory(session_id)
 
-    executor = AgentExecutor(
-        agent=react_agent,
+    agent_executor = AgentExecutor(
+        agent=summary_react_agent,
         tools=tools,
-        verbose=True,
-        memory=memory
+        memory=memory,
+        verbose=True
     )
 
-    result = executor.invoke({"input": user_input})
-    return result.get("output", result)
+    response = agent_executor.invoke({"input": user_input})
+
+    if isinstance(response, dict) and "output" in response:
+        return response["output"]
+    return response
+
+# -----------------------------
+# Gradio UI
+# -----------------------------
+import gradio as gr
 
 with gr.Blocks() as app:
-    gr.Markdown("# 🤖 ReviewGenie — AI Product Research Agent")
+    gr.Markdown("# 🤖 Review Genie — LangChain ReAct Agent")
+    gr.Markdown("Ask anything. Session-based memory enabled.")
 
     with gr.Row():
-        inp = gr.Textbox(label="Ask a question")
-        out = gr.Textbox(label="Response", lines=8)
+        input_box = gr.Textbox(label="Your question:")
+        output_box = gr.Textbox(label="AI Response:", lines=10)
 
-    hidden_session = gr.Textbox(value="default_session", visible=False)
-
-    gr.Button("Submit").click(
-        chat_with_agent, 
-        inputs=[inp, hidden_session],
-        outputs=out
+    submit = gr.Button("Submit")
+    submit.click(
+        chat_with_agent,
+        inputs=[input_box, gr.State("session")],
+        outputs=output_box
     )
 
 app.launch(debug=True, share=True)
