@@ -26,10 +26,15 @@ from langchain import hub  # For pulling prompts from LangChain Hub
 import gradio as gr
 
 # -----------------------------
-# API Keys (set these once in your EC2 environment)
+# Ensure API Keys are set in EC2 environment
 # -----------------------------
-os.environ["OPENAI_API_KEY"] = "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"
-os.environ["TAVILY_API_KEY"] = "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"
+openai_key = os.environ.get("OPENAI_API_KEY")
+tavily_key = os.environ.get("TAVILY_API_KEY")
+
+if not openai_key or not tavily_key:
+    raise ValueError(
+        "Please set the environment variables OPENAI_API_KEY and TAVILY_API_KEY on your EC2 instance."
+    )
 
 # -----------------------------
 # Embeddings + FAISS vector store
