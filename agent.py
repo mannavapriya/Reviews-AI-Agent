@@ -5,18 +5,18 @@ import numpy as np
 import pandas as pd
 
 # -----------------------------
-# LangChain imports
+# LangChain imports (modern structure)
 # -----------------------------
-from langchain.prompts import ChatPromptTemplate
+from langchain.prompts.chat import ChatPromptTemplate
 from langchain.output_parsers import StrOutputParser
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain.chat_models import ChatOpenAI
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
 from langchain.tools import tool, VectorStoreRetrieverTool
-from langchain.agents import create_react_agent, AgentExecutor
 from langchain.memory import ConversationSummaryMemory
+from langchain.agents import initialize_agent, AgentExecutor, AgentType
 from langchain import hub  # For pulling prompts from LangChain Hub
 
 # -----------------------------
@@ -25,20 +25,19 @@ from langchain import hub  # For pulling prompts from LangChain Hub
 import gradio as gr
 
 # -----------------------------
-# API Keys (set these on your EC2 environment)
-# Example: export OPENAI_API_KEY="sk-xxxx" 
-#          export TAVILY_API_KEY="tvly-xxxx"
+# API Keys (set these in EC2 environment)
 # -----------------------------
+# Make sure you export these in your EC2 shell:
+# export OPENAI_API_KEY="your_openai_key"
+# export TAVILY_API_KEY="your_tavily_key"
+
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
-
-if not OPENAI_API_KEY or not TAVILY_API_KEY:
-    raise ValueError("Please set OPENAI_API_KEY and TAVILY_API_KEY in your environment")
 
 # -----------------------------
 # Embeddings + FAISS vector store
 # -----------------------------
-embeddings = OpenAIEmbeddings()
+embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
 
 vector = FAISS.load_local(
     "./faiss_index",
@@ -62,18 +61,28 @@ amazon_tool = VectorStoreRetrieverTool(
 
 @tool
 def amazon_product_search(query: str):
+    """
+    Search for information about Amazon products.
+    """
     return amazon_tool.run(query)
 
 # -----------------------------
 # Tavily Search Tool
 # -----------------------------
+# You may need to reinstall langchain-community
+from langchain_community.tools.tavily_search import TavilySearchResults
+
 tavily_search_tool = TavilySearchResults(
     max_results=5,
-    include_images=True
+    include_images=True,
+    tavily_api_key=TAVILY_API_KEY
 )
 
 @tool
 def search_tavily(query: str):
+    """
+    Search the web using Tavily.
+    """
     return tavily_search_tool.run(query)
 
 tools = [amazon_product_search, search_tavily]
@@ -87,9 +96,10 @@ prompt = hub.pull("hwchase17/react")
 # Chat LLM
 # -----------------------------
 summary_llm = ChatOpenAI(
-    model="gpt-4o-mini",
+    model_name="gpt-4o-mini",
     temperature=0,
-    streaming=True
+    streaming=True,
+    openai_api_key=OPENAI_API_KEY
 )
 
 # -----------------------------
@@ -109,10 +119,12 @@ def get_memory(session_id):
 # -----------------------------
 # ReAct Agent
 # -----------------------------
-summary_react_agent = create_react_agent(
-    llm=summary_llm,
+summary_react_agent = initialize_agent(
     tools=tools,
-    prompt=prompt
+    llm=summary_llm,
+    agent=AgentType.CHAT_REACT_DESCRIPTION,
+    verbose=True,
+    memory=None
 )
 
 # -----------------------------
