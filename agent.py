@@ -5,41 +5,34 @@ import numpy as np
 import pandas as pd
 
 # -----------------------------
-# LangChain Core imports
+# LangChain imports
 # -----------------------------
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# OpenAI LLM + embeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-
-# Vector store
 from langchain_community.vectorstores import FAISS
-
-# Tools
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain.tools import tool
 from langchain.tools.retriever import create_retriever_tool
-
-# Agent & memory
-from langchain.agents import AgentExecutor, create_react_agent
+from langchain.agents import create_react_agent, AgentExecutor
 from langchain.memory import ConversationSummaryMemory
+from langchain import hub  # For pulling prompts from LangChain Hub
 
-# LangChain Hub
-from langchain import hub
-
-# Gradio UI
+# -----------------------------
+# Gradio
+# -----------------------------
 import gradio as gr
 
 # -----------------------------
-# API Keys
+# API Keys (set these once in your EC2 environment)
 # -----------------------------
-os.environ["OPENAI_API_KEY"] = "YOUR_OPENAI_API_KEY"
-os.environ["TAVILY_API_KEY"] = "YOUR_TAVILY_API_KEY"
+os.environ["OPENAI_API_KEY"] = "YOUR_OPENAI_KEY"
+os.environ["TAVILY_API_KEY"] = "YOUR_TAVILY_KEY"
 
 # -----------------------------
-# Embeddings + Vector Store
+# Embeddings + FAISS vector store
 # -----------------------------
 embeddings = OpenAIEmbeddings()
 
@@ -66,7 +59,7 @@ amazon_tool = create_retriever_tool(
 @tool
 def amazon_product_search(query: str):
     """
-    Search for information about Amazon products using the FAISS index.
+    Search for information about Amazon products.
     """
     return amazon_tool.run(query)
 
@@ -81,33 +74,32 @@ tavily_search_tool = TavilySearchResults(
 @tool
 def search_tavily(query: str):
     """
-    Execute a web search using the TavilySearchResults tool.
+    Search the web using Tavily.
     """
     return tavily_search_tool.run(query)
 
 tools = [amazon_product_search, search_tavily]
 
 # -----------------------------
-# Pull Prompt from LangChain Hub
+# Load ReAct prompt from LangChain Hub
 # -----------------------------
 prompt = hub.pull("hwchase17/react")
 
 # -----------------------------
-# LLM + Session Memory
+# Chat LLM
 # -----------------------------
 summary_llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0,
-    streaming=True,
-    base_cache=None  # prevents Pydantic BaseCache errors
+    streaming=True
 )
 
+# -----------------------------
+# Session memory
+# -----------------------------
 session_memory = {}
 
 def get_memory(session_id):
-    """
-    Get or create a ConversationSummaryMemory instance for a given session.
-    """
     if session_id not in session_memory:
         session_memory[session_id] = ConversationSummaryMemory(
             llm=summary_llm,
@@ -126,20 +118,20 @@ summary_react_agent = create_react_agent(
 )
 
 # -----------------------------
-# Agent Execution Function
+# Agent execution function
 # -----------------------------
 def chat_with_agent(user_input, session_id):
-    """
-    Process user input through the ReAct agent with session-based memory.
-    """
     memory = get_memory(session_id)
+
     agent_executor = AgentExecutor(
         agent=summary_react_agent,
         tools=tools,
         memory=memory,
         verbose=True
     )
+
     response = agent_executor.invoke({"input": user_input})
+
     if isinstance(response, dict) and "output" in response:
         return response["output"]
     return response
@@ -152,7 +144,7 @@ with gr.Blocks() as app:
     gr.Markdown("Ask anything. Session-based memory enabled.")
 
     with gr.Row():
-        input_box = gr.Textbox(label="Your question:", placeholder="Type here...")
+        input_box = gr.Textbox(label="Your question:", placeholder="Type your query here...")
         output_box = gr.Textbox(label="AI Response:", lines=10)
 
     submit = gr.Button("Submit")
@@ -162,5 +154,4 @@ with gr.Blocks() as app:
         outputs=output_box
     )
 
-# Launch Gradio app
 app.launch(debug=True, share=True)
