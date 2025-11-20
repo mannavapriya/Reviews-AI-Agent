@@ -1,24 +1,7 @@
-# LangChain core & community modules
-langchain==0.1.17
-langchain-openai==0.0.26
-langchain-community==0.0.32
-langchain-core==0.1.17
-
-# LLM
-openai==1.29.0
-
-# Vector store
-faiss-cpu==1.7.4
-
-# Text splitting
-langchain-text-splitters==0.0.8
-
-# Utilities
-numpy==1.25.2
-pandas==2.1.1
-
-# Gradio
-gradio==3.53.2
-
-# Optional: hub integration
-requests==2.31.0
+numpy>=1.25.2
+pandas>=2.1.0
+gradio>=3.40.0
+faiss-cpu>=1.7.4
+langchain>=0.0.350
+langchain-openai>=0.3.35
+langchain-community>=0.0.40
