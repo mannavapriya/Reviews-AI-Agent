@@ -1,151 +1,188 @@
-import os
-import numpy as np
+# Necessary Imports
+import csv
 import pandas as pd
+import math
+import numpy as np
+import os
+from langchain_core.output_parsers import StrOutputParser
 
-# -----------------------------
-# LangChain imports (modern structure)
-# -----------------------------
-from langchain.chat_models import ChatOpenAI
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.tools import tool, VectorStoreRetrieverTool
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_core.output_parsers import StrOutputParser
+from langchain.agents import create_openai_functions_agent
 from langchain.memory import ConversationSummaryMemory
-from langchain.agents import initialize_agent, AgentExecutor, AgentType
-from langchain import hub  # For pulling prompts from LangChain Hub
+from langchain_openai import ChatOpenAI
 
-# Tavily
-from langchain_community.tools.tavily_search import TavilySearchResults
+# Perform necessary imports for creating agents
+from langchain import hub # Used to pull predefined prompts from LangChain Hub
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_community.chat_message_histories import ChatMessageHistory # Used to store chat history in memory
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_openai import OpenAI
+import os
 
-# -----------------------------
-# Gradio
-# -----------------------------
-import gradio as gr
+## Set the OpenAI API key and model name
+Open_API_Key = os.getenv("Open_API_Key")
+os.environ["OPENAI_API_KEY"] = Open_API_Key
+MODEL="gpt-4o-mini"
+client = OpenAI(api_key=Open_API_Key)
 
-# -----------------------------
-# API Keys (EC2 environment)
-# -----------------------------
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
+## Set the Tavily API key
+os.environ["TAVILY_API_KEY"] = os.getenv("Tavily_API_Key")
 
-# -----------------------------
-# Embeddings + FAISS vector store
-# -----------------------------
-embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-
+## Load the vectorstore
+embeddings = OpenAIEmbeddings()
 vector = FAISS.load_local(
-    "./faiss_index",
-    embeddings,
-    allow_dangerous_deserialization=True
+    "./faiss_index", embeddings, allow_dangerous_deserialization=True
 )
 
-retriever = vector.as_retriever(
-    search_type="similarity",
-    search_kwargs={"k": 4}
-)
 
-# -----------------------------
-# Amazon Retriever Tool
-# -----------------------------
-amazon_tool = VectorStoreRetrieverTool(
-    name="Amazon Product Search",
-    description="Search FAISS index for Amazon product data.",
-    retriever=retriever
-)
+## Create the conversational agent
 
+llm = ChatOpenAI(api_key=os.environ["OPENAI_API_KEY"], temperature=0)
+
+# Creating a retriever
+# See https://python.langchain.com/v0.1/docs/modules/data_connection/retrievers/vectorstore/
+retriever = vector.as_retriever()
+
+
+# import the 'tool' decorator
+from langchain.tools import tool
+from langchain.tools.retriever import create_retriever_tool
+
+# Define a tool for Amazon product search using @tool decorator
 @tool
 def amazon_product_search(query: str):
-    return amazon_tool.run(query)
+    """Search for information about Amazon products.
+    For any questions related to Amazon products, this tool must be used."""
 
-# -----------------------------
-# Tavily Search Tool
-# -----------------------------
-tavily_search_tool = TavilySearchResults(
-    max_results=5,
-    include_images=True,
-    tavily_api_key=TAVILY_API_KEY
-)
+    # Create the retriever tool
+    retriever_tool = create_retriever_tool(
+        retriever,  # The retriever object that fetches Amazon product data
+        name="amazon_search",
+        description="Search for information about Amazon products."
+    )
+
+    # Execute search based on query
+    return retriever_tool.invoke(query)
+
+# Import necessary classes from LangChain for Tavily integration
+from langchain_community.tools.tavily_search import TavilySearchResults
 
 @tool
 def search_tavily(query: str):
-    return tavily_search_tool.run(query)
+    """
+    Executes a web search using the TavilySearchResults tool.
 
-tools = [amazon_product_search, search_tavily]
+    Parameters:
+        query (str): The search query entered by the user.
 
-# -----------------------------
-# Load ReAct prompt from LangChain Hub (optional)
-# -----------------------------
-prompt = hub.pull("hwchase17/react")  # Can skip if you want default
+    Returns:
+        list: A list of search results containing answers, raw content, and images.
+    """
+    # Create an instance of TavilySearchResults with customized parameters
+    search_tool = TavilySearchResults(
+        max_results=5,  # Retrieves up to 5 search results
+        include_answer=True,  # Includes direct answers when available
+        include_raw_content=True,  # Includes full raw text content from search results
+        include_images=True,  # Includes images from the search results
+    )
 
-# -----------------------------
-# Chat LLM
-# -----------------------------
-summary_llm = ChatOpenAI(
-    model_name="gpt-4o-mini",
-    temperature=0,
-    streaming=True,
-    openai_api_key=OPENAI_API_KEY
+    # Invoke the search with the given query and return the results
+    return search_tool.invoke(query)
+
+# hwchase17/react is a prompt template designed for ReAct-style
+# conversational agents.
+prompt = hub.pull("hwchase17/react")
+
+## Create a list of tools: retriever_tool and search_tool
+tools = [search_tavily, amazon_product_search]
+
+# Enable memory optimization with ConversationSummaryMemory
+# This ensures that older conversations are summarized instead of keeping full history,
+# preventing excessive context length that slows down responses.
+summary_memory = ConversationSummaryMemory(llm=llm, memory_key="chat_history")
+
+# Initialize OpenAI model with streaming enabled
+# Streaming allows tokens to be processed in real-time, reducing response latency.
+summary_llm = ChatOpenAI(model='gpt-4o-mini', temperature=0, streaming=True)
+
+# Create a ReAct agent
+# The agent will reason and take actions based on retrieved tools and memory.
+summary_react_agent = create_react_agent(
+    llm=summary_llm,      # Using GPT-4o-mini streaming
+    tools=tools,  # Tools like search, retrieval, or external APIs
+    prompt=prompt # Predefined prompt to guide agent reasoning
 )
 
-# -----------------------------
-# Session memory
-# -----------------------------
+# Configure the AgentExecutor to manage reasoning steps
+summary_agent_executor = AgentExecutor(
+    agent=summary_react_agent,
+    tools=tools,
+    verbose=True,                  # Logs step-by-step execution
+    handle_parsing_errors=True,     # Prevents agent from crashing due to unexpected outputs
+    max_iterations=20,               # Limits iterations to avoid infinite loops
+    memory=summary_memory
+)
+
+
+
+# Building an UI for the chatbot with agents
+import gradio as gr
+
+# Initialize session-based chat history
 session_memory = {}
 
 def get_memory(session_id):
+    """Fetch or create a chat history instance for a given session."""
     if session_id not in session_memory:
-        session_memory[session_id] = ConversationSummaryMemory(
-            llm=summary_llm,
-            memory_key="chat_history",
-            return_messages=True
-        )
+        session_memory[session_id] = ChatMessageHistory()
     return session_memory[session_id]
 
-# -----------------------------
-# ReAct Agent
-# -----------------------------
-summary_react_agent = initialize_agent(
-    tools=tools,
-    llm=summary_llm,
-    agent=AgentType.CHAT_REACT_DESCRIPTION,
-    verbose=True,
-    memory=None
+# Wrap agent with session-based chat history
+agent_with_chat_history = RunnableWithMessageHistory(
+    summary_agent_executor,
+    lambda session_id: get_memory(session_id),  # Fetch memory based on session ID
+    input_messages_key="input",
+    history_messages_key="chat_history",
 )
 
-# -----------------------------
-# Agent execution function
-# -----------------------------
+# Define function for Gradio interface
 def chat_with_agent(user_input, session_id):
-    memory = get_memory(session_id)
-
-    agent_executor = AgentExecutor(
-        agent=summary_react_agent,
-        tools=tools,
-        memory=memory,
-        verbose=True
+    """Processes user input and maintains session-based chat history."""
+    memory = get_memory(session_id)  # Fetch chat history for the session
+    #memory.clear()
+    # Invoke the agent with session memory
+    response = agent_with_chat_history.invoke(
+        {"input": user_input, "chat_history": memory.messages},
+        config={"configurable": {"session_id": session_id}}
     )
 
-    response = agent_executor.invoke({"input": user_input})
-
+    # Extract only the 'output' field from the response
     if isinstance(response, dict) and "output" in response:
-        return response["output"]
-    return response
+        return response["output"]  # Return clean text response
+    else:
+        return "Error: Unexpected response format"
 
-# -----------------------------
-# Gradio UI
-# -----------------------------
+# Create Gradio app interface
 with gr.Blocks() as app:
-    gr.Markdown("# 🤖 Review Genie — LangChain ReAct Agent")
-    gr.Markdown("Ask anything. Session-based memory enabled.")
+    gr.Markdown("# 🤖 Review Genie - Agents & ReAct Framework")
+    gr.Markdown("Enter your query below and get AI-powered responses with session memory.")
 
     with gr.Row():
-        input_box = gr.Textbox(label="Your question:", placeholder="Type your query here...")
-        output_box = gr.Textbox(label="AI Response:", lines=10)
+        input_box = gr.Textbox(label="Enter your query:", placeholder="Ask something...")
+        output_box = gr.Textbox(label="Response:", lines=10)
 
-    submit = gr.Button("Submit")
-    submit.click(
-        chat_with_agent,
-        inputs=[input_box, gr.State("session")],
-        outputs=output_box
-    )
+    submit_button = gr.Button("Submit")
 
+    submit_button.click(chat_with_agent, inputs=input_box, outputs=output_box)
+
+# Launch the Gradio app
 app.launch(debug=True, share=True)
