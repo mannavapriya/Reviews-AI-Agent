@@ -1,18 +1,23 @@
+# LangChain & related
 langchain==0.1.20
 langchain-core==0.1.52
-langchain-community==0.0.38   # <- updated to satisfy langchain
+langchain-community==0.0.38
 langchain-openai==0.0.8
 langchainhub==0.1.15
 
+# Tavily & vectorstore
 tavily-python==0.3.3
 faiss-cpu==1.7.4
 
+# Data & parsing
 numpy==1.26.4
 pandas==2.2.2
 beautifulsoup4==4.12.3
 
+# Gradio
 gradio==4.19.2
-gradio_client==0.14.0
+gradio-client==0.10.1
 
+# Tokenization & environment
 tiktoken==0.7.0
 python-dotenv==1.0.1
