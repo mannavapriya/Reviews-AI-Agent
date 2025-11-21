@@ -1,19 +1,22 @@
+# Core LangChain packages
 langchain==0.1.20
 langchain-core==0.1.52
-langchain-community==0.0.50
+langchain-community==0.0.38
 langchain-openai==0.0.8
 langchainhub==0.1.15
+langchain-text-splitters==0.0.1
 
-tavily-python==0.3.3
+# Vectorstore and AI helpers
 faiss-cpu==1.7.4
+tavily-python==0.3.3
 
+# Utilities
 numpy==1.26.4
 pandas==2.2.2
 beautifulsoup4==4.12.3
-
-gradio==4.19.2
-gradio-client==0.10.1
-
 tiktoken==0.7.0
 python-dotenv==1.0.1
-langchain-text-splitters==0.0.1
+
+# UI
+gradio==4.19.2
+gradio-client==0.10.1
